@@ -177,7 +177,7 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
       messagePrefix,
       `入场时间: ${formatDateTime(res.session.createdAt)}`,
       `离场时间: ${formatDateTime(res.session.closedAt)}`,
-      `消费: ${res.billing.totalCost} 月饼`,
+      `消费: ${res.session.finalCost} 月饼`,
     ].join('\n');
   } else {
     // First request, show billing preview

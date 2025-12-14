@@ -1,9 +1,8 @@
 {
   "name": "koishi-plugin-prism-neo",
   "description": "prism koishi前端",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "main": "lib/index.js",
-  "typings": "lib/index.d.ts",
   "files": [
     "lib",
     "dist"
@@ -16,12 +15,5 @@
   ],
   "peerDependencies": {
     "koishi": "^4.18.7"
-  },
-  "koishi": {
-    "service": {
-      "required": [
-        "database"
-      ]
-    }
   }
 }

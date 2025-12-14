@@ -18,6 +18,7 @@ export interface LogoutSession {
     createdAt: string; // ISO date string
     closedAt: string; // ISO date string
     costOverwrite?: number;
+    finalCost: number;
 }
 
 export interface LogoutBilling {
