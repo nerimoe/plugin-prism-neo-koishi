@@ -1,4 +1,4 @@
-import { Argv, Context, h, Schema } from 'koishi'
+import { Argv, Context, h, Schema, Session } from 'koishi'
 import * as service from './service'
 import { ApiError, BillingResponse, LoggedInUser, UserAsset, Wallet } from './model'
 import { ActionContext } from './types'
@@ -16,6 +16,14 @@ export const Config: Schema<Config> = Schema.object({
   url: Schema.string().required(),
   admin: Schema.string().default("authority:3"),
 })
+
+async function getUserName(session: Session, userId?: string) {
+  if (userId) {
+    return (await session.bot.getUser(userId)).name + `(${userId}})`;
+  } else {
+    return "匿名用户"
+  }
+}
 
 const handleAction = <A extends any[]>(action: (argv: Argv, ...args: A) => Promise<string>) => {
   return async (argv: Argv, ...args: A) => {
@@ -156,7 +164,7 @@ async function handleLoginCmd(context: ActionContext, user?: string) {
   const pwd = await service.getLock(context, userId);
 
   if (user) {
-    return `✅ 已为用户 ${userId} 入场，该用户的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
+    return `✅ 已为用户 ${getUserName(context.session, userId)} 入场，该用户的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
   }
   return `✅ 入场成功，你的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
 }
@@ -172,7 +180,7 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
     // Confirmation step
     kv.delete(targetUserId);
     const res = await service.logout(context, targetUserId);
-    const messagePrefix = user ? `✅ 已为用户 ${targetUserId} 退场` : '✅ 退场成功';
+    const messagePrefix = user ? `✅ 已为用户 ${getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
     return [
       messagePrefix,
       `入场时间: ${formatDateTime(res.session.createdAt)}`,
@@ -180,12 +188,11 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
       `消费: ${res.session.finalCost} 月饼`,
     ].join('\n');
   } else {
-    // First request, show billing preview
     const billingRes = await service.billing(context, targetUserId);
     const billingMessage = formatBilling(billingRes);
     kv.set(targetUserId, now);
     if (user) {
-      return `以下是用户 ${targetUserId} 的账单预览:\n\n${billingMessage}\n\n---\n⚠️ 请在60秒内再次输入 /logout ${user} 以确认登出。`;
+      return `以下是用户 ${await getUserName(context.session, targetUserId)} 的账单预览:\n\n${billingMessage}\n\n---\n⚠️ 请在60秒内再次输入 /logout ${user} 以确认登出。`;
     }
     return `${billingMessage}\n\n---\n⚠️ 这是您的账单预览。请在60秒内再次输入 /logout 以确认登出。`;
   }
@@ -197,11 +204,19 @@ async function handleListCmd(context: ActionContext, user?: string) {
     return "窝里目前没有玩家呢";
   }
 
-  const userReports = users.map((user: LoggedInUser) => {
-    const qqBind = user.binds.find(bind => bind.type === "QQ");
-    const name = qqBind ? qqBind.bid : "匿名玩家";
+  const tasks = users.map((user: LoggedInUser) => {
     const entryDate = formatDateTime(user.sessions[0].createdAt);
-    return `玩家: ${name}\n入场时间: ${entryDate}`;
+    const qqBind = user.binds.find(bind => bind.type === "QQ");
+
+    let id = qqBind ? qqBind.bid : null;
+
+    return { entryDate, task: getUserName(context.session, id) };
+  });
+
+  const platformUsers = await Promise.all(tasks.map(t => t.task));
+
+  const userReports = platformUsers.map((u, idx) => {
+    return `玩家: ${u}\n入场时间: ${tasks[idx].entryDate}`;
   });
 
   return `窝里目前共有 ${users.length} 人\n\n${userReports.join('\n\n')}`;
@@ -215,7 +230,7 @@ async function handleWalletCmd(context: ActionContext, user?: string) {
   const message: string[] = [];
 
   const targetUserId = user ? userId : undefined; // for message formatting
-  message.push(targetUserId ? `--- 用户 ${targetUserId} 的钱包余额 ---` : '--- 钱包余额 ---');
+  message.push(targetUserId ? `--- 用户 ${await getUserName(context.session, targetUserId)} 的钱包余额 ---` : '--- 钱包余额 ---');
   message.push(
     `可用: ${res.total.available} 月饼 (共 ${res.total.all})`,
     `  - 付费: ${res.paid.available}`,
@@ -264,7 +279,7 @@ async function handleBillingCmd(context: ActionContext, user?: string) {
   const res = await service.billing(context, userId);
   const billingMessage = formatBilling(res);
   if (user) {
-    return `用户 ${userId} 的账单:\n\n${billingMessage}`;
+    return `用户 ${await getUserName(context.session, userId)} 的账单:\n\n${billingMessage}`;
   }
   return billingMessage;
 }
@@ -284,10 +299,10 @@ async function handleItemsCmd(context: ActionContext, user?: string) {
 
   const userAssets = await service.assets(context, userId);
   if (!userAssets || userAssets.length === 0) {
-    return user ? `用户 ${userId} 没有任何物品。` : "您当前没有任何物品。";
+    return user ? `用户 ${await getUserName(context.session, userId)} 没有任何物品。` : "您当前没有任何物品。";
   }
 
-  const header = user ? `--- 用户 ${userId} 拥有的物品 ---` : '--- 您拥有的物品 ---';
+  const header = user ? `--- 用户 ${await getUserName(context.session, userId)} 拥有的物品 ---` : '--- 您拥有的物品 ---';
   const itemsList = userAssets.map((asset: UserAsset) => {
     let line = `- ${asset.asset.name} (x${asset.count})`;
     if (asset.expireAt) {
@@ -334,7 +349,7 @@ async function handleWalletAdd(context: ActionContext, user: string, amount: str
   if (!amount) return "请输入数量";
   const res = await service.walletAdd(context, parseInt(amount), userId);
   return [
-    `为用户 ${userId} 增加月饼成功`,
+    `为用户 ${await getUserName(context.session, userId)} 增加月饼成功`,
     `增加前: ${res.originalBalance}`,
     `增加后: ${res.finalBalance}`,
   ].join('\n');
