@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-prism-neo",
   "description": "prism koishi前端",
-  "version": "0.0.7",
+  "version": "0.0.11",
   "main": "lib/index.js",
   "files": [
     "lib",

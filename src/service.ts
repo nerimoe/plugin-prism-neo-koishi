@@ -139,6 +139,13 @@ export async function redeem({ ctx, config }: ActionContext, code: string, userI
             code
         }
     )
+}
 
-
+export async function insertCoin({ ctx, config }: ActionContext, alias: string, userId: string) {
+    return await ctx.http.post(
+        makeUrl(config.url, `/remote/${alias}/coin`),
+        {
+            userId: `QQ:${userId}`
+        }
+    )
 }

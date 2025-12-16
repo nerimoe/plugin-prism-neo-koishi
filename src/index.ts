@@ -19,7 +19,7 @@ export const Config: Schema<Config> = Schema.object({
 
 async function getUserName(session: Session, userId?: string) {
   if (userId) {
-    return (await session.bot.getUser(userId)).name + `(${userId}})`;
+    return (await session.bot.getUser(userId)).name + ` ( ${userId} )`;
   } else {
     return "匿名用户"
   }
@@ -403,6 +403,12 @@ async function handleRedeem(context: ActionContext, code: string) {
   return message.join('\n');
 }
 
+async function handleCoin(context: ActionContext, alias: string) {
+  if (!alias) return "请输入设备名";
+  const res = await service.insertCoin(context, alias, context.session.userId);
+  return `已为 ${res.machineName} 投入 ${res.count} 个币`;
+}
+
 export function apply(ctx: Context, config: Config) {
   // ctx.state.inject(name, {
   //   pendingLogout: {} as Record<string, number>
@@ -432,6 +438,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('on <alias>').action(createAction(handleMachineOn));
   ctx.command('off <alias>').action(createAction(handleMachineOff));
   ctx.command('redeem <code>').action(createAction(handleRedeem));
+  ctx.command('coin <alias>').action(createAction(handleCoin));
 
   ctx.command('add <user:user> <amount>').action(createAction(handleWalletAdd));
   ctx.command('del <user:user> <amount>').action(createAction(handleWalletDeduct));
