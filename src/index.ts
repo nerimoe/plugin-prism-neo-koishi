@@ -318,13 +318,15 @@ async function handleItemsCmd(context: ActionContext, user?: string) {
 
 async function handleMachineOn(context: ActionContext, alias: string) {
   if (!alias) return "请输入设备名";
-  const res = await service.machinePowerOn(context, alias, context.session.userId);
+  let isAdmin = await context.ctx.permissions.check(context.config.admin, context.session)
+  const res = await service.machinePowerOn(context, alias, context.session.userId, !isAdmin);
   return `${res.machine} 启动成功`;
 }
 
 async function handleMachineOff(context: ActionContext, alias: string) {
   if (!alias) return "请输入设备名";
-  const res = await service.machinePowerOff(context, alias, context.session.userId);
+  let isAdmin = await context.ctx.permissions.check(context.config.admin, context.session)
+  const res = await service.machinePowerOff(context, alias, context.session.userId, !isAdmin);
   return `${res.machine} 关闭成功`;
 }
 
@@ -405,7 +407,8 @@ async function handleRedeem(context: ActionContext, code: string) {
 
 async function handleCoin(context: ActionContext, alias: string) {
   if (!alias) return "请输入设备名";
-  const res = await service.insertCoin(context, alias, context.session.userId);
+  let isAdmin = await context.ctx.permissions.check(context.config.admin, context.session)
+  const res = await service.insertCoin(context, alias, context.session.userId, isAdmin);
   return `已为 ${res.machineName} 投入 ${res.count} 个币`;
 }
 

@@ -66,24 +66,26 @@ export async function getLock({ ctx, config }: ActionContext, userId: string): P
     )
 }
 
-export async function machinePowerOn({ ctx, config }: ActionContext, machineName: string, userId: string) {
+export async function machinePowerOn({ ctx, config }: ActionContext, machineName: string, userId: string, needLogin: boolean = true) {
     return await ctx.http.post(
         makeUrl(config.url, `/machine/power`),
         {
             machineName,
             "powerState": true,
-            userId: `QQ:${userId}`
+            userId: `QQ:${userId}`,
+            needLogin
         }
     )
 }
 
-export async function machinePowerOff({ ctx, config }: ActionContext, machineName: string, userId: string) {
+export async function machinePowerOff({ ctx, config }: ActionContext, machineName: string, userId: string, needLogin: boolean = true) {
     return await ctx.http.post(
         makeUrl(config.url, `/machine/power`),
         {
             machineName,
             "powerState": false,
-            userId: `QQ:${userId}`
+            userId: `QQ:${userId}`,
+            needLogin
         }
     )
 }
@@ -141,11 +143,12 @@ export async function redeem({ ctx, config }: ActionContext, code: string, userI
     )
 }
 
-export async function insertCoin({ ctx, config }: ActionContext, alias: string, userId: string) {
+export async function insertCoin({ ctx, config }: ActionContext, alias: string, userId: string, force: boolean = false) {
     return await ctx.http.post(
         makeUrl(config.url, `/remote/${alias}/coin`),
         {
-            userId: `QQ:${userId}`
+            userId: `QQ:${userId}`,
+            force
         }
     )
 }
