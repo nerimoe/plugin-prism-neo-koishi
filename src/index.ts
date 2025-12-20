@@ -164,7 +164,7 @@ async function handleLoginCmd(context: ActionContext, user?: string) {
   const pwd = await service.getLock(context, userId);
 
   if (user) {
-    return `✅ 已为用户 ${getUserName(context.session, userId)} 入场，该用户的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
+    return `✅ 已为用户 ${await getUserName(context.session, userId)} 入场，该用户的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
   }
   return `✅ 入场成功，你的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
 }
@@ -180,7 +180,7 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
     // Confirmation step
     kv.delete(targetUserId);
     const res = await service.logout(context, targetUserId);
-    const messagePrefix = user ? `✅ 已为用户 ${getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
+    const messagePrefix = user ? `✅ 已为用户 ${await getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
     return [
       messagePrefix,
       `入场时间: ${formatDateTime(res.session.createdAt)}`,
