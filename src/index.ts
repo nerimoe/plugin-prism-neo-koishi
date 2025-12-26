@@ -69,6 +69,19 @@ const formatBilling = (res: BillingResponse): string => {
   // Session Times
   message.push(`入场: ${formatDateTime(res.session.createdAt)}`);
   message.push(`结算: ${formatDateTime(res.billing.endTime)}`);
+
+  const startTime = new Date(res.session.createdAt).getTime();
+  const endTime = new Date(res.billing.endTime).getTime();
+  const durationMs = endTime - startTime;
+  const totalMinutes = Math.floor(durationMs / (1000 * 60));
+  let durationStr = `${totalMinutes}分钟`;
+  if (totalMinutes >= 60) {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    durationStr = `${hours}小时${mins}分钟`;
+  }
+  message.push(`时长: ${durationStr}`);
+
   message.push('---');
 
   // Costs
@@ -117,8 +130,16 @@ const formatBilling = (res: BillingResponse): string => {
           timeString = `${formatDate(start)} ${formatTime(start)} - ${formatDate(end)} ${formatTime(end)}`;
         }
 
+        let segDurationStr = `${seg.durationMinutes}分钟`;
+        if (seg.durationMinutes >= 60) {
+          const hours = Math.floor(seg.durationMinutes / 60);
+          const mins = seg.durationMinutes % 60;
+          segDurationStr = `${hours}小时${mins}分钟`;
+        }
+
         message.push(`- ${seg.ruleName}`);
         message.push(`  时段: ${timeString}`);
+        message.push(`  时长: ${segDurationStr}`);
         message.push(`  费用: ${seg.cost} 月饼 ${seg.isCapped ? '(已封顶)' : ''}`);
       }
     });
