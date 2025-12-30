@@ -182,12 +182,10 @@ async function handleLoginCmd(context: ActionContext, user?: string) {
   if (error) return error;
 
   await service.login(context, userId);
-  const pwd = await service.getLock(context, userId);
 
-  if (user) {
-    return `✅ 已为用户 ${await getUserName(context.session, userId)} 入场，该用户的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
-  }
-  return `✅ 入场成功，你的门锁密码是: ${pwd.password}\n注意! 门锁密码有效期为三分钟`;
+  let [_, lockMessage] = await Promise.all([service.login(context, userId), handleLockCmd(context)]);
+  let message = "✅ 入场成功\n\n" + lockMessage;
+  return message;
 }
 
 async function handleLogoutCmd(context: ActionContext, user?: string) {
@@ -310,6 +308,7 @@ async function handleLockCmd(context: ActionContext) {
   return [
     '获取密码成功',
     `你的门锁密码是: ${res.password}`,
+    `输入完成后按 # 结束`,
     '注意! 门锁密码有效期为三分钟'
   ].join('\n');
 }
