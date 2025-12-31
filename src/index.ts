@@ -180,9 +180,6 @@ async function handleRegisterCmd(context: ActionContext, user?: string) {
 async function handleLoginCmd(context: ActionContext, user?: string) {
   const { error, userId } = await getTargetUserId(context, user);
   if (error) return error;
-
-  await service.login(context, userId);
-
   let [_, lockMessage] = await Promise.all([service.login(context, userId), handleLockCmd(context)]);
   let message = "✅ 入场成功\n\n" + lockMessage;
   return message;
