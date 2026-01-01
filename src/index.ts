@@ -10,11 +10,13 @@ let kv: Map<string, number> = new Map();
 export interface Config {
   url: string;
   admin: string;
+  currency: string;
 }
 
 export const Config: Schema<Config> = Schema.object({
   url: Schema.string().required(),
   admin: Schema.string().default("authority:3"),
+  currency: Schema.string().default("月饼").description("货币名称"),
 })
 
 async function getUserName(session: Session, userId?: string) {
@@ -62,7 +64,7 @@ const formatDateTime = (dateStr: string | Date | null) => {
   return `${y}/${m}/${d} ${h}:${min}:${s}`;
 };
 
-const formatBilling = (res: BillingResponse): string => {
+const formatBilling = (res: BillingResponse, currency: string): string => {
   const message: string[] = [];
   message.push('--- 账单详情 ---');
 
@@ -91,22 +93,22 @@ const formatBilling = (res: BillingResponse): string => {
     finalCost = res.session.costOverwrite;
   }
 
-  message.push(`计费价: ${originalCost} 月饼`);
+  message.push(`计费价: ${originalCost} ${currency}`);
 
   if (res.discount && res.discount.appliedLogs.length > 0) {
     res.discount.appliedLogs.forEach(log => {
-      message.push(`  -「${log.asset}」: -${log.saved} 月饼`);
+      message.push(`  -「${log.asset}」: -${log.saved} ${currency}`);
     });
   }
 
-  message.push(`结算价: ${finalCost} 月饼`);
+  message.push(`结算价: ${finalCost} ${currency}`);
   message.push('---');
 
   // Wallet
   const currentBalance = res.wallet.total.available;
   const finalBalance = currentBalance - finalCost;
-  message.push(`当前余额: ${currentBalance} 月饼`);
-  message.push(`扣款后: ${finalBalance} 月饼`);
+  message.push(`当前余额: ${currentBalance} ${currency}`);
+  message.push(`扣款后: ${finalBalance} ${currency}`);
   message.push('---');
 
   // Segments
@@ -140,7 +142,7 @@ const formatBilling = (res: BillingResponse): string => {
         message.push(`- ${seg.ruleName}`);
         message.push(`  时段: ${timeString}`);
         message.push(`  时长: ${segDurationStr}`);
-        message.push(`  费用: ${seg.cost} 月饼 ${seg.isCapped ? '(已封顶)' : ''}`);
+        message.push(`  费用: ${seg.cost} ${currency} ${seg.isCapped ? '(已封顶)' : ''}`);
       }
     });
   } else {
@@ -202,11 +204,11 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
       messagePrefix,
       `入场时间: ${formatDateTime(res.session.createdAt)}`,
       `离场时间: ${formatDateTime(res.session.closedAt)}`,
-      `消费: ${res.session.finalCost} 月饼`,
+      `消费: ${res.session.finalCost} ${context.config.currency}`,
     ].join('\n');
   } else {
     const billingRes = await service.billing(context, targetUserId);
-    const billingMessage = formatBilling(billingRes);
+    const billingMessage = formatBilling(billingRes, context.config.currency);
     kv.set(targetUserId, now);
     if (user) {
       return `以下是用户 ${await getUserName(context.session, targetUserId)} 的账单预览:\n\n${billingMessage}\n\n---\n⚠️ 请在60秒内再次输入 /logout ${user} 以确认登出。`;
@@ -249,21 +251,21 @@ async function handleWalletCmd(context: ActionContext, user?: string) {
   const targetUserId = user ? userId : undefined; // for message formatting
   message.push(targetUserId ? `--- 用户 ${await getUserName(context.session, targetUserId)} 的钱包余额 ---` : '--- 钱包余额 ---');
   message.push(
-    `可用: ${res.total.available} 月饼 (共 ${res.total.all})`,
+    `可用: ${res.total.available} ${context.config.currency} (共 ${res.total.all})`,
     `  - 付费: ${res.paid.available}`,
     `  - 免费: ${res.free.available}`
   );
 
   const unavailable = res.total.all - res.total.available;
   if (unavailable > 0) {
-    message.push(`\n您还有 ${unavailable} 月饼未到可用时间。`);
+    message.push(`\n您还有 ${unavailable} ${context.config.currency}未到可用时间。`);
   }
 
   const expiringFreeAssets = res.free.details?.available?.filter(asset => asset.expireAt) || [];
   if (expiringFreeAssets.length > 0) {
     expiringFreeAssets.sort((a, b) => new Date(a.expireAt!).getTime() - new Date(b.expireAt!).getTime());
     const soonestToExpire = expiringFreeAssets[0];
-    message.push(`\n注意：您有 ${soonestToExpire.count} 免费月饼将于 ${formatDateTime(soonestToExpire.expireAt)} 过期。`);
+    message.push(`\n注意：您有 ${soonestToExpire.count} 免费${context.config.currency}将于 ${formatDateTime(soonestToExpire.expireAt)} 过期。`);
   }
 
   // Passes
@@ -294,7 +296,7 @@ async function handleBillingCmd(context: ActionContext, user?: string) {
   if (error) return error;
 
   const res = await service.billing(context, userId);
-  const billingMessage = formatBilling(res);
+  const billingMessage = formatBilling(res, context.config.currency);
   if (user) {
     return `用户 ${await getUserName(context.session, userId)} 的账单:\n\n${billingMessage}`;
   }
@@ -369,7 +371,7 @@ async function handleWalletAdd(context: ActionContext, user: string, amount: str
   if (!amount) return "请输入数量";
   const res = await service.walletAdd(context, parseInt(amount), userId);
   return [
-    `为用户 ${await getUserName(context.session, userId)} 增加月饼成功`,
+    `为用户 ${await getUserName(context.session, userId)} 增加${context.config.currency}成功`,
     `增加前: ${res.originalBalance}`,
     `增加后: ${res.finalBalance}`,
   ].join('\n');
@@ -382,7 +384,7 @@ async function handleWalletDeduct(context: ActionContext, user: string, amount: 
   if (!amount) return "请输入数量";
   const res = await service.walletDel(context, parseInt(amount), userId);
   return [
-    `为用户 ${userId} 扣除月饼成功`,
+    `为用户 ${userId} 扣除${context.config.currency}成功`,
     `扣款前: ${res.originalBalance}`,
     `扣款后: ${res.finalBalance}`,
   ].join('\n');
