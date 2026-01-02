@@ -71,7 +71,7 @@ export async function machinePowerOn({ ctx, config }: ActionContext, machineName
         makeUrl(config.url, `/machine/power`),
         {
             machineName,
-            "powerState": true,
+            powerState: true,
             userId: `QQ:${userId}`,
             needLogin
         }
@@ -83,7 +83,7 @@ export async function machinePowerOff({ ctx, config }: ActionContext, machineNam
         makeUrl(config.url, `/machine/power`),
         {
             machineName,
-            "powerState": false,
+            powerState: false,
             userId: `QQ:${userId}`,
             needLogin
         }

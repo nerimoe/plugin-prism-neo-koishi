@@ -8,19 +8,27 @@ export const name = 'prism-neo'
 let kv: Map<string, number> = new Map();
 
 export interface Config {
+  // botId: string;
   url: string;
   admin: string;
+  broadcasts: string[];
   currency: string;
   autoLockOnLogin: boolean;
   logoutConfirmation: boolean;
+  powerOffInterval: number;
 }
 
 export const Config: Schema<Config> = Schema.object({
+  // botId: Schema.string().required().description("e.g: onebot:114514"),
   url: Schema.string().required(),
   admin: Schema.string().default("authority:3"),
+  broadcasts: Schema.array(
+    Schema.string()
+  ),
   currency: Schema.string().default("月饼").description("货币名称"),
   autoLockOnLogin: Schema.boolean().default(true).description("登录时自动获取门锁密码"),
   logoutConfirmation: Schema.boolean().default(true).description("登出时需要二次确认"),
+  powerOffInterval: Schema.number().default(600000).description("多长时间没人时自动关闭所有机器")
 })
 
 async function getUserName(session: Session, userId?: string) {
@@ -241,6 +249,7 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
 
     message += "\n";
     message += formatBilling(res, context.config.currency);
+    return message;
   }
 
   const pendingLogout = kv.get(targetUserId);
@@ -543,5 +552,25 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('add <user:user> <amount>').action(createAction(handleWalletAdd));
   ctx.command('del <user:user> <amount>').action(createAction(handleWalletDeduct));
 
-  ctx.command('overwrite <user:user> <amount>').action(createAction(handleCostOverwrite))
+  ctx.command('overwrite <user:user> <amount>').action(createAction(handleCostOverwrite));
+
+  ctx.setInterval(
+    async () => {
+      let list = await service.list({ ctx, config });
+      if (list.length < 1) {
+        let machines = await service.getAllMachinePower({ ctx, config });
+        let turnOff = false;
+        machines.forEach((m) => {
+          if (m.state.state) {
+            turnOff = true;
+          }
+        })
+        if (turnOff) {
+          let res = await service.machinePowerOff({ ctx, config }, "all", null);
+          ctx.broadcast(config.broadcasts, "窝里目前有 0 人，自动关闭所有机器")
+        }
+        return;
+      }
+    }, config.powerOffInterval
+  )
 }
