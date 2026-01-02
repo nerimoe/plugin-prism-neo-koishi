@@ -11,12 +11,16 @@ export interface Config {
   url: string;
   admin: string;
   currency: string;
+  autoLockOnLogin: boolean;
+  logoutConfirmation: boolean;
 }
 
 export const Config: Schema<Config> = Schema.object({
   url: Schema.string().required(),
   admin: Schema.string().default("authority:3"),
   currency: Schema.string().default("月饼").description("货币名称"),
+  autoLockOnLogin: Schema.boolean().default(true).description("登录时自动获取门锁密码"),
+  logoutConfirmation: Schema.boolean().default(true).description("登出时需要二次确认"),
 })
 
 async function getUserName(session: Session, userId?: string) {
@@ -161,6 +165,41 @@ const formatBilling = (res: BillingResponse, currency: string): string => {
 
 // --- Command Handlers ---
 
+async function executeWithAutoRegister<T>(
+  context: ActionContext,
+  userArg: string | undefined,
+  userId: string,
+  action: () => Promise<T>,
+  formatter: (res: T) => Promise<string> | string
+): Promise<string> {
+  try {
+    const res = await action();
+    return await formatter(res);
+  } catch (e) {
+    const code = (e as Partial<ApiError>)?.response?.data?.errcode;
+    if (code === "USER_NOT_FOUND") {
+      let message = "用户不存在，尝试注册\n";
+      message += await handleRegisterCmd(context, userArg);
+      message += "\n";
+
+      try {
+        const res = await action();
+        message += await formatter(res);
+        return message;
+      } catch (retryError) {
+        const apiMessage = (retryError as Partial<ApiError>)?.response?.data?.message;
+        if (apiMessage) {
+          message += apiMessage;
+        } else {
+          message += '操作失败。';
+        }
+        return message;
+      }
+    }
+    throw e;
+  }
+}
+
 async function getTargetUserId(context: ActionContext, user: string | undefined): Promise<{ error?: string; userId?: string }> {
   if (user) {
     if (!await context.ctx.permissions.check(context.config.admin, context.session)) {
@@ -183,8 +222,11 @@ async function handleLoginCmd(context: ActionContext, user?: string) {
   const { error, userId } = await getTargetUserId(context, user);
   if (error) return error;
   await service.login(context, userId);
-  let lockMessage = await handleLockCmd(context);
-  let message = "✅ 入场成功\n\n" + lockMessage;
+  let message = "✅ 入场成功";
+  if (context.config.autoLockOnLogin) {
+    let lockMessage = await handleLockCmd(context);
+    message += "\n\n" + lockMessage;
+  }
   return message;
 }
 
@@ -192,11 +234,20 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
   const { error, userId: targetUserId } = await getTargetUserId(context, user);
   if (error) return error;
 
+  if (!context.config.logoutConfirmation) {
+    // Bypass confirmation
+    const res = await service.logout(context, targetUserId);
+    let message = user ? `✅ 已为用户 ${await getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
+
+    message += "\n";
+    message += formatBilling(res, context.config.currency);
+  }
+
   const pendingLogout = kv.get(targetUserId);
   const now = Date.now();
 
   if (pendingLogout && (now - pendingLogout < 60 * 1000)) {
-    // Confirmation step
+    // Confirmation step for when logoutConfirmation is true
     kv.delete(targetUserId);
     const res = await service.logout(context, targetUserId);
     const messagePrefix = user ? `✅ 已为用户 ${await getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
@@ -369,12 +420,19 @@ async function handleWalletAdd(context: ActionContext, user: string, amount: str
   if (error) return error;
 
   if (!amount) return "请输入数量";
-  const res = await service.walletAdd(context, parseInt(amount), userId);
-  return [
-    `为用户 ${await getUserName(context.session, userId)} 增加${context.config.currency}成功`,
-    `增加前: ${res.originalBalance}`,
-    `增加后: ${res.finalBalance}`,
-  ].join('\n');
+  return executeWithAutoRegister(
+    context,
+    user,
+    userId,
+    () => service.walletAdd(context, parseInt(amount), userId),
+    async (res: any) => {
+      return [
+        `为用户 ${await getUserName(context.session, userId)} 增加${context.config.currency}成功`,
+        `增加前: ${res.originalBalance}`,
+        `增加后: ${res.finalBalance}`,
+      ].join('\n');
+    }
+  );
 }
 
 async function handleWalletDeduct(context: ActionContext, user: string, amount: string) {
@@ -382,12 +440,19 @@ async function handleWalletDeduct(context: ActionContext, user: string, amount: 
   if (error) return error;
 
   if (!amount) return "请输入数量";
-  const res = await service.walletDel(context, parseInt(amount), userId);
-  return [
-    `为用户 ${userId} 扣除${context.config.currency}成功`,
-    `扣款前: ${res.originalBalance}`,
-    `扣款后: ${res.finalBalance}`,
-  ].join('\n');
+  return executeWithAutoRegister(
+    context,
+    user,
+    userId,
+    () => service.walletDel(context, parseInt(amount), userId),
+    (res: any) => {
+      return [
+        `为用户 ${userId} 扣除${context.config.currency}成功`,
+        `扣款前: ${res.originalBalance}`,
+        `扣款后: ${res.finalBalance}`,
+      ].join('\n');
+    }
+  );
 }
 
 async function handleCostOverwrite(context: ActionContext, user: string, amount: string) {
@@ -395,8 +460,13 @@ async function handleCostOverwrite(context: ActionContext, user: string, amount:
   if (error) return error;
 
   if (!amount) return "请输入数量";
-  await service.costOverwrite(context, amount, userId);
-  return `为用户 ${userId} 调价成功`;
+  return executeWithAutoRegister(
+    context,
+    user,
+    userId,
+    () => service.costOverwrite(context, amount, userId),
+    () => `为用户 ${userId} 调价成功`
+  );
 }
 
 async function handleRedeem(context: ActionContext, code: string) {
@@ -404,25 +474,32 @@ async function handleRedeem(context: ActionContext, code: string) {
   if (error) return error;
   if (!code) return "请输入兑换码";
 
-  const res = await service.redeem(context, code, userId);
-  const items = res as { name: string, count: number, assetType: string, durationMs?: number }[];
+  return executeWithAutoRegister(
+    context,
+    undefined,
+    userId,
+    () => service.redeem(context, code, userId),
+    (res) => {
+      const items = res as { name: string, count: number, assetType: string, durationMs?: number }[];
 
-  if (!items || items.length === 0) {
-    return "兑换成功，但没有获得任何物品。";
-  }
+      if (!items || items.length === 0) {
+        return "兑换成功，但没有获得任何物品。";
+      }
 
-  const message: string[] = ["✅ 兑换成功！您获得了以下物品："];
+      const message: string[] = ["✅ 兑换成功！您获得了以下物品："];
 
-  items.forEach(item => {
-    let itemName = item.name;
-    if (item.assetType === 'PASS' && item.durationMs) {
-      const days = Math.floor(item.durationMs / (1000 * 60 * 60 * 24));
-      if (days > 0) itemName += ` (${days}天)`;
+      items.forEach(item => {
+        let itemName = item.name;
+        if (item.assetType === 'PASS' && item.durationMs) {
+          const days = Math.floor(item.durationMs / (1000 * 60 * 60 * 24));
+          if (days > 0) itemName += ` (${days}天)`;
+        }
+        message.push(`- ${itemName} x${item.count}`);
+      });
+
+      return message.join('\n');
     }
-    message.push(`- ${itemName} x${item.count}`);
-  });
-
-  return message.join('\n');
+  );
 }
 
 async function handleCoin(context: ActionContext, alias: string) {

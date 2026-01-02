@@ -133,6 +133,7 @@ export interface BillingResponse {
 
 export interface ApiErrorData {
     message: string;
+    errcode: string;
 }
 
 export interface ApiError {

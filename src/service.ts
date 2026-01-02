@@ -27,7 +27,7 @@ export async function login({ ctx, config }: ActionContext, userId: string): Pro
     )
 }
 
-export async function logout({ ctx, config }: ActionContext, userId: string): Promise<LogoutResponse> {
+export async function logout({ ctx, config }: ActionContext, userId: string): Promise<BillingResponse> {
     return await ctx.http.post(
         makeUrl(config.url, `/users/QQ:${userId}/logout`)
     )
