@@ -407,6 +407,7 @@ async function handleMachineOff(context: ActionContext, alias: string) {
   if (!alias) return "请输入设备名";
   let isAdmin = await context.ctx.permissions.check(context.config.admin, context.session)
   const res = await service.machinePowerOff(context, alias, context.session.userId, !isAdmin);
+  if (alias === "all") return `全部机器关闭成功`;
   return `${res.machine} 关闭成功`;
 }
 
@@ -561,12 +562,12 @@ export function apply(ctx: Context, config: Config) {
         let machines = await service.getAllMachinePower({ ctx, config });
         let turnOff = false;
         machines.forEach((m) => {
-          if (m.state.state) {
+          if (m.state.state === 'on') {
             turnOff = true;
           }
         })
         if (turnOff) {
-          let res = await service.machinePowerOff({ ctx, config }, "all", null);
+          let res = await service.machinePowerOff({ ctx, config }, "all", "system", false);
           ctx.broadcast(config.broadcasts, "窝里目前有 0 人，自动关闭所有机器")
         }
         return;

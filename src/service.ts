@@ -90,13 +90,13 @@ export async function machinePowerOff({ ctx, config }: ActionContext, machineNam
     )
 }
 
-export async function getAllMachinePower({ ctx, config, session }: ActionContext): Promise<{ machine: string, state: { state: boolean } }[]> {
+export async function getAllMachinePower({ ctx, config, session }: ActionContext): Promise<{ machine: string, state: { state: string } }[]> {
     return await ctx.http.get(
         makeUrl(config.url, `/machine/power`)
     )
 }
 
-export async function getMachinePower({ ctx, config, session }: ActionContext, machineName: string): Promise<{ machine: string, state: { state: boolean } }> {
+export async function getMachinePower({ ctx, config, session }: ActionContext, machineName: string): Promise<{ machine: string, state: { state: string } }> {
     return await ctx.http.get(
         makeUrl(config.url, `/machine/power?name=${machineName}`)
     )
