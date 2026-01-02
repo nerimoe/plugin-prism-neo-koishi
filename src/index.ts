@@ -562,7 +562,7 @@ export function apply(ctx: Context, config: Config) {
         let machines = await service.getAllMachinePower({ ctx, config });
         let turnOff = false;
         machines.forEach((m) => {
-          if (m.state.state === 'on') {
+          if (m.state.state !== 'off') {
             turnOff = true;
           }
         })
