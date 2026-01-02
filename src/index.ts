@@ -12,10 +12,12 @@ export interface Config {
   url: string;
   admin: string;
   broadcasts: string[];
+  pmOnLogout: string[];
   currency: string;
   autoLockOnLogin: boolean;
   logoutConfirmation: boolean;
   powerOffInterval: number;
+
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -23,6 +25,9 @@ export const Config: Schema<Config> = Schema.object({
   url: Schema.string().required(),
   admin: Schema.string().default("authority:3"),
   broadcasts: Schema.array(
+    Schema.string()
+  ),
+  pmOnLogout: Schema.array(
     Schema.string()
   ),
   currency: Schema.string().default("月饼").description("货币名称"),
@@ -245,10 +250,12 @@ async function handleLogoutCmd(context: ActionContext, user?: string) {
   if (!context.config.logoutConfirmation) {
     // Bypass confirmation
     const res = await service.logout(context, targetUserId);
-    let message = user ? `✅ 已为用户 ${await getUserName(context.session, targetUserId)} 退场` : '✅ 退场成功';
+    let name = await getUserName(context.session, targetUserId);
+    let message = user ? `✅ 已为用户 ${name} 退场` : '✅ 退场成功';
 
     message += "\n";
     message += formatBilling(res, context.config.currency);
+    await context.session.bot.broadcast(context.config.pmOnLogout, `${name}\n${message}`)
     return message;
   }
 
