@@ -2,6 +2,7 @@ import { Argv, Context, h, Schema, Session } from 'koishi'
 import { PrismService } from './service'
 import { ApiError, BillingResponse, LoggedInUser, UserAsset, Wallet, Asset } from './model'
 import { ActionContext } from './types'
+import { log } from 'console'
 
 export const name = 'prism-neo'
 
@@ -225,7 +226,7 @@ async function getTargetUserId(context: ActionContext, user: string | undefined)
     if (!await context.ctx.permissions.check(context.config.admin, context.session)) {
       return { error: "权限不足" };
     }
-    return { userId: user.split(':')[1] };
+    return { userId: user.split(':')[1] ?? user };
   }
   return { userId: context.session.userId };
 }
@@ -369,6 +370,38 @@ async function handleWalletCmd(context: ActionContext, user?: string) {
     });
   }
 
+  return message.join('\n');
+}
+
+async function handleHistoriesCmd(context: ActionContext, arg1?: string, arg2?: any) {
+  let limit = 10;
+  let userArg: string | undefined;
+
+  if (arg1 && /^\d+$/.test(arg1)) {
+    limit = parseInt(arg1);
+  } else {
+    userArg = arg1;
+    if (arg2 && /^\d+$/.test(String(arg2))) {
+      limit = parseInt(String(arg2));
+    }
+  }
+
+  const { error, userId } = await getTargetUserId(context, userArg);
+  if (error) return error;
+  console.log(userId);
+
+  const res = await context.prism.history(userId, limit) as any;
+  if (!res || !res.sessions || res.sessions.length === 0) {
+    return "暂无历史记录";
+  }
+
+  const message: string[] = [`📜 最近 ${res.sessions.length} 条记录:`];
+  res.sessions.forEach((s: any) => {
+    const start = formatDateTime(s.createdAt);
+    const end = s.closedAt ? formatDateTime(s.closedAt) : '进行中';
+    const cost = s.finalCost !== null ? `${s.finalCost} ${context.config.currency}` : '未结算';
+    message.push(`- [${s.id}] ${start} -> ${end} (${cost})`);
+  });
   return message.join('\n');
 }
 
@@ -854,6 +887,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('logout [user:user]').action(createAction(handleLogoutCmd));
   ctx.command('list').action(createAction(handleListCmd));
   ctx.command('wallet [user:user]').action(createAction(handleWalletCmd));
+  ctx.command('history [arg1] [arg2]').action(createAction(handleHistoriesCmd));
   ctx.command('billing [user:user]').action(createAction(handleBillingCmd));
   ctx.command('lock').action(createAction(handleLockCmd));
   ctx.command('items [user:user]').action(createAction(handleItemsCmd));

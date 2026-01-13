@@ -35,6 +35,12 @@ export class PrismService {
         )
     }
 
+    async history(userId: string, limit: number) {
+        return await this.ctx.http.get(
+            this.url(`/users/QQ:${userId}/sortedsessions?limit=${limit}`)
+        )
+    }
+
     async logout(userId: string): Promise<BillingResponse> {
         return await this.ctx.http.post(
             this.url(`/users/QQ:${userId}/logout`)
