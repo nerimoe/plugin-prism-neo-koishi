@@ -1,154 +1,245 @@
-import { ActionContext } from "./types";
+import { Context } from "koishi";
+import { Config } from "./index";
 import { BillingResponse, ListResponse, LogoutResponse, UserAsset, Wallet } from "./model";
 
-function makeUrl(baseUrl: string, endpoint: string) {
-    return `${baseUrl.trimEnd().replace(/\/+$/, "")}/api/${endpoint.trimStart().replace(/^\/+/, "")}`
-}
+export class PrismService {
+    private apiBase: string;
 
-export async function register({ ctx, config }: ActionContext, userId: string): Promise<unknown> {
-    return await ctx.http.post(
-        makeUrl(config.url, "/users"),
-        [
+    constructor(private ctx: Context, private config: Config) {
+        this.apiBase = `${config.url.trimEnd().replace(/\/+$/, "")}/api`;
+    }
+
+    private url(endpoint: string) {
+        return `${this.apiBase}/${endpoint.trimStart().replace(/^\/+/, "")}`;
+    }
+
+    async register(userId: string): Promise<unknown> {
+        return await this.ctx.http.post(
+            this.url("/users"),
+            [
+                {
+                    "binds": [
+                        {
+                            "type": "QQ",
+                            "bid": userId
+                        }
+                    ]
+                }
+            ]
+        )
+    }
+
+    async login(userId: string): Promise<unknown> {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/login`)
+        )
+    }
+
+    async logout(userId: string): Promise<BillingResponse> {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/logout`)
+        )
+    }
+
+    async billing(userId: string): Promise<BillingResponse> {
+        return await this.ctx.http.get(
+            this.url(`/users/QQ:${userId}/billing`)
+        )
+    }
+
+    async list(): Promise<ListResponse> {
+        return await this.ctx.http.get(
+            this.url(`/users/logined?binds=true&sessions=true`)
+        )
+    }
+
+    async wallet(userId: string): Promise<Wallet> {
+        return await this.ctx.http.get(
+            this.url(`/users/QQ:${userId}/wallet?details=true`)
+        )
+    }
+
+    async assets(userId: string): Promise<UserAsset[]> {
+        return await this.ctx.http.get(
+            this.url(`/users/QQ:${userId}/assets?details=true`)
+        )
+    }
+
+    async upsertUserAssets(userId: string, assets: { id: number; count: number }[]) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/assets`),
+            assets
+        )
+    }
+
+    async deleteUserAsset(userId: string, userAssetId: number) {
+        return await this.ctx.http.delete(
+            this.url(`/users/QQ:${userId}/assets/${userAssetId}`)
+        )
+    }
+
+    async updateUserAsset(userId: string, userAssetId: number, amount: number) {
+        return await this.ctx.http.patch(
+            this.url(`/users/QQ:${userId}/assets/${userAssetId}`),
+            { amount }
+        )
+    }
+
+    async getLock(userId: string): Promise<{
+        password: string;
+        id: any;
+    }> {
+        return await this.ctx.http.get(
+            this.url(`/users/QQ:${userId}/door-password`)
+        )
+    }
+
+    async machinePowerOn(machineName: string, userId: string, needLogin: boolean = true) {
+        return await this.ctx.http.post(
+            this.url(`/machine/power`),
             {
-                "binds": [
-                    {
-                        "type": "QQ",
-                        "bid": userId
-                    }
-                ]
+                machineName,
+                powerState: true,
+                userId: `QQ:${userId}`,
+                needLogin
             }
-        ]
-    )
-}
+        )
+    }
 
-export async function login({ ctx, config }: ActionContext, userId: string): Promise<unknown> {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/login`)
-    )
-}
+    async machinePowerOff(machineName: string, userId: string, needLogin: boolean = true) {
+        return await this.ctx.http.post(
+            this.url(`/machine/power`),
+            {
+                machineName,
+                powerState: false,
+                userId: `QQ:${userId}`,
+                needLogin
+            }
+        )
+    }
 
-export async function logout({ ctx, config }: ActionContext, userId: string): Promise<BillingResponse> {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/logout`)
-    )
-}
+    async getAllMachinePower(): Promise<{ machine: string, state: { state: string } }[]> {
+        return await this.ctx.http.get(
+            this.url(`/machine/power`)
+        )
+    }
 
-export async function billing({ ctx, config }: ActionContext, userId: string): Promise<BillingResponse> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/users/QQ:${userId}/billing`)
-    )
-}
+    async getMachinePower(machineName: string): Promise<{ machine: string, state: { state: string } }> {
+        return await this.ctx.http.get(
+            this.url(`/machine/power?name=${machineName}`)
+        )
+    }
 
-export async function list({ ctx, config }: ActionContext): Promise<ListResponse> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/users/logined?binds=true&sessions=true`)
-    )
-}
+    async walletAdd(amount: number, userId: string) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/wallet`),
+            {
+                type: "free",
+                action: amount,
+                comment: "管理员添加"
+            }
+        )
+    }
 
-export async function wallet({ ctx, config }: ActionContext, userId: string): Promise<Wallet> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/users/QQ:${userId}/wallet?details=true`)
-    )
-}
+    async walletDel(amount: number, userId: string) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/wallet`),
+            {
+                type: "free",
+                action: -amount,
+                comment: "管理员扣除"
+            }
+        )
+    }
 
-export async function assets({ ctx, config }: ActionContext, userId: string): Promise<UserAsset[]> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/users/QQ:${userId}/assets?details=true`)
-    )
-}
+    async costOverwrite(amount: string, userId: string) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/billing-overwrite`),
+            {
+                cost: parseInt(amount)
+            }
+        )
+    }
 
-export async function getLock({ ctx, config }: ActionContext, userId: string): Promise<{
-    password: string;
-    id: any;
-}> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/users/QQ:${userId}/door-password`)
-    )
-}
+    async redeem(code: string, userId: string) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/redeem`),
+            {
+                code
+            }
+        )
+    }
 
-export async function machinePowerOn({ ctx, config }: ActionContext, machineName: string, userId: string, needLogin: boolean = true) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/machine/power`),
-        {
-            machineName,
-            powerState: true,
-            userId: `QQ:${userId}`,
-            needLogin
-        }
-    )
-}
+    async insertCoin(alias: string, userId: string, force: boolean = false) {
+        return await this.ctx.http.post(
+            this.url(`/remote/${alias}/coin`),
+            {
+                userId: `QQ:${userId}`,
+                force
+            }
+        )
+    }
 
-export async function machinePowerOff({ ctx, config }: ActionContext, machineName: string, userId: string, needLogin: boolean = true) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/machine/power`),
-        {
-            machineName,
-            powerState: false,
-            userId: `QQ:${userId}`,
-            needLogin
-        }
-    )
-}
+    // --- Admin API ---
 
-export async function getAllMachinePower({ ctx, config, session }: ActionContext): Promise<{ machine: string, state: { state: string } }[]> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/machine/power`)
-    )
-}
+    async adminListAssets() {
+        return await this.ctx.http.get(this.url('/admin/assets'));
+    }
 
-export async function getMachinePower({ ctx, config, session }: ActionContext, machineName: string): Promise<{ machine: string, state: { state: string } }> {
-    return await ctx.http.get(
-        makeUrl(config.url, `/machine/power?name=${machineName}`)
-    )
-}
+    async adminCreateAsset(data: any) {
+        return await this.ctx.http.post(this.url('/admin/assets'), data);
+    }
 
-export async function walletAdd({ ctx, config }: ActionContext, amount: number, userId: string) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/wallet`),
-        {
-            type: "free",
-            action: amount,
-            comment: "管理员添加"
-        }
-    )
-}
+    async adminDeleteAsset(id: number) {
+        return await this.ctx.http.delete(this.url(`/admin/assets/${id}`));
+    }
 
-export async function walletDel({ ctx, config }: ActionContext, amount: number, userId: string) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/wallet`),
-        {
-            type: "free",
-            action: -amount,
-            comment: "管理员扣除"
-        }
-    )
+    async adminListCoupons() {
+        return await this.ctx.http.get(this.url('/admin/coupons'));
+    }
 
-}
+    async adminCreateCoupon(data: any) {
+        return await this.ctx.http.post(this.url('/admin/coupons'), data);
+    }
 
-export async function costOverwrite({ ctx, config }: ActionContext, amount: string, userId: string) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/billing-overwrite`),
-        {
-            cost: parseInt(amount)
-        }
-    )
-}
+    async adminListGifts() {
+        return await this.ctx.http.get(this.url('/admin/gifts'));
+    }
 
-export async function redeem({ ctx, config }: ActionContext, code: string, userId: string) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/users/QQ:${userId}/redeem`),
-        {
-            code
-        }
-    )
-}
+    async adminCreateGift(data: any) {
+        return await this.ctx.http.post(this.url('/admin/gifts'), data);
+    }
 
-export async function insertCoin({ ctx, config }: ActionContext, alias: string, userId: string, force: boolean = false) {
-    return await ctx.http.post(
-        makeUrl(config.url, `/remote/${alias}/coin`),
-        {
-            userId: `QQ:${userId}`,
-            force
-        }
-    )
+    async adminDeleteGift(id: number) {
+        return await this.ctx.http.delete(this.url(`/admin/gifts/${id}`));
+    }
+
+    async adminGenerateGiftCodes(id: number, count: number) {
+        return await this.ctx.http.post(this.url(`/admin/gifts/${id}/codes`), { count });
+    }
+
+    async adminListRules() {
+        return await this.ctx.http.get(this.url('/admin/rules'));
+    }
+
+    async adminCreateRule(data: any) {
+        return await this.ctx.http.post(this.url('/admin/rules'), data);
+    }
+
+    async adminDeleteRule(id: number) {
+        return await this.ctx.http.delete(this.url(`/admin/rules/${id}`));
+    }
+
+    async adminUpdateRuleStatus(id: number, available: boolean) {
+        return await this.ctx.http(this.url(`/admin/rules/${id}`), {
+            method: 'PATCH',
+            data: { available }
+        });
+    }
+    async adminAddUserAsset(userId: string, id: number, count: number) {
+        return await this.ctx.http.post(this.url(`/users/QQ:${userId}/assets`), {
+            id,
+            count
+        })
+    }
 }

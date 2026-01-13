@@ -99,6 +99,21 @@ export interface UserAsset {
     count: number;
 }
 
+export type DiscountType = 'RATE' | 'FIXED_OFF';
+
+export interface BillingEffectConfig {
+    type: DiscountType;
+    value: number;
+    priority: number;
+    consume: boolean;
+    stackable: boolean;
+    maxDiscountAmount?: number;
+    condition?: {
+        matchRuleIds?: number[];
+        minCost?: number;
+    };
+}
+
 export interface Asset {
     type: string;
     id: number;
@@ -108,6 +123,7 @@ export interface Asset {
     activeAt: Date | null;
     description: string | null;
     valid: boolean;
+    billingEffect?: BillingEffectConfig;
 }
 
 export type UserAssetWithDef = UserAsset & { asset: Asset };
