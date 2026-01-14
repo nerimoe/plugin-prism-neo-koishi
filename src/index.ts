@@ -39,8 +39,8 @@ export const Config: Schema<Config> = Schema.object({
 
 async function getUserName(session: Session, userId?: string) {
   if (userId) {
-    // return (await session.bot.getUser(userId)).name + ` ( ${userId} )`;
-    return "dummy"
+    return (await session.bot.getUser(userId)).name + ` ( ${userId} )`;
+    // return "dummy"
   } else {
     return "匿名用户"
   }
@@ -373,24 +373,12 @@ async function handleWalletCmd(context: ActionContext, user?: string) {
   return message.join('\n');
 }
 
-async function handleHistoriesCmd(context: ActionContext, arg1?: string, arg2?: any) {
-  let limit = 10;
-  let userArg: string | undefined;
-
-  if (arg1 && /^\d+$/.test(arg1)) {
-    limit = parseInt(arg1);
-  } else {
-    userArg = arg1;
-    if (arg2 && /^\d+$/.test(String(arg2))) {
-      limit = parseInt(String(arg2));
-    }
-  }
-
-  const { error, userId } = await getTargetUserId(context, userArg);
+async function handleHistoriesCmd(context: ActionContext, user?: string, limit?: number) {
+  const { error, userId } = await getTargetUserId(context, user);
   if (error) return error;
   console.log(userId);
 
-  const res = await context.prism.history(userId, limit) as any;
+  const res = await context.prism.history(userId, limit ?? 10);
   if (!res || !res.sessions || res.sessions.length === 0) {
     return "暂无历史记录";
   }
@@ -887,7 +875,8 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('logout [user:user]').action(createAction(handleLogoutCmd));
   ctx.command('list').action(createAction(handleListCmd));
   ctx.command('wallet [user:user]').action(createAction(handleWalletCmd));
-  ctx.command('history [arg1] [arg2]').action(createAction(handleHistoriesCmd));
+  ctx.command('history [amount:number]').action(createAction((context, amount) => handleHistoriesCmd(context, undefined, amount)));
+  ctx.command('ahistory <user:user> [amount:number]').action(createAction((context, user, amount) => handleHistoriesCmd(context, user, amount)));
   ctx.command('billing [user:user]').action(createAction(handleBillingCmd));
   ctx.command('lock').action(createAction(handleLockCmd));
   ctx.command('items [user:user]').action(createAction(handleItemsCmd));
