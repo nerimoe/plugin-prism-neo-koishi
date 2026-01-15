@@ -200,6 +200,10 @@ export class PrismService {
         return await this.ctx.http.delete(this.url(`/admin/assets/${id}`));
     }
 
+    async adminToggleAssetState(id: number, state: boolean) {
+        return await this.ctx.http.patch(this.url(`/admin/assets/${id}`), { valid: state });
+    }
+
     async adminListCoupons() {
         return await this.ctx.http.get(this.url('/admin/coupons'));
     }
@@ -243,9 +247,9 @@ export class PrismService {
         });
     }
     async adminAddUserAsset(userId: string, id: number, count: number) {
-        return await this.ctx.http.post(this.url(`/users/QQ:${userId}/assets`), {
+        return await this.ctx.http.post(this.url(`/users/QQ:${userId}/assets`), [{
             id,
             count
-        })
+        }])
     }
 }

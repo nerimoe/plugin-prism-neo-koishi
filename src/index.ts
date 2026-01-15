@@ -473,7 +473,7 @@ async function handleMachineShow(context: ActionContext, alias?: string) {
   }
 }
 
-async function handleWalletAdd(context: ActionContext, user: string, amount: string) {
+async function handleWalletAdd(context: ActionContext, user: string, amount: number) {
   if (!user || !amount) {
     await context.session.execute('help add');
     return "";
@@ -484,7 +484,7 @@ async function handleWalletAdd(context: ActionContext, user: string, amount: str
   return executeWithAutoRegister(
     context,
     user,
-    () => context.prism.walletAdd(parseFloat(amount), userId),
+    () => context.prism.walletAdd(amount, userId),
     async (res: any) => {
       return [
         `为用户 ${await getUserName(context.session, userId)} 增加${context.config.currency}成功`,
@@ -495,7 +495,7 @@ async function handleWalletAdd(context: ActionContext, user: string, amount: str
   );
 }
 
-async function handleWalletDeduct(context: ActionContext, user: string, amount: string) {
+async function handleWalletDeduct(context: ActionContext, user: string, amount: number) {
   if (!user || !amount) {
     await context.session.execute('help del');
     return "";
@@ -506,7 +506,7 @@ async function handleWalletDeduct(context: ActionContext, user: string, amount: 
   return executeWithAutoRegister(
     context,
     user,
-    () => context.prism.walletDel(parseInt(amount), userId),
+    () => context.prism.walletDel(amount, userId),
     (res: any) => {
       return [
         `为用户 ${userId} 扣除${context.config.currency}成功`,
@@ -598,42 +598,62 @@ async function handleAdminListAssets(context: ActionContext) {
   }).join('\n\n');
 }
 
-async function handleAdminAddAsset(context: ActionContext, type: string, assetId: number, name: string, desc: string) {
+async function handleAdminAddAsset(context: ActionContext, type: string, defId: number, name: string, desc: string) {
   await checkAdmin(context);
   const opts = context.options || {};
-  if (!type || assetId === undefined || !name) {
+  if (!type || defId === undefined || !name) {
     await context.session.execute('help admin.asset.add');
     return "";
   }
   await context.prism.adminCreateAsset({
     type,
-    assetId: assetId,
+    assetId: defId,
     name,
     description: desc,
     valid: opts.valid,
     activeAt: opts.active,
     expireAt: opts.expire
   });
-  return `资产 ${name} [${type}-${assetId}] 创建成功`;
+  return `资产 ${name} [${type}-${defId}] 创建成功`;
 }
 
-async function handleAdminDelAsset(context: ActionContext, id: string) {
+async function handleAdminDelAsset(context: ActionContext, id: number) {
   await checkAdmin(context);
   if (!id) {
     await context.session.execute('help admin.asset.del');
     return "";
   }
-  await context.prism.adminDeleteAsset(parseInt(id));
+  await context.prism.adminDeleteAsset(id);
   return `资产 ${id} 删除成功`;
 }
 
-async function handleAdminDelCoupon(context: ActionContext, id: string) {
+async function handleAdminValidAsset(context: ActionContext, id: number) {
+  await checkAdmin(context);
+  if (!id) {
+    await context.session.execute('help admin.asset.valid');
+    return "";
+  }
+  await context.prism.adminToggleAssetState(id, true);
+  return `已启用 ${id}`;
+}
+
+async function handleAdminInvalidAsset(context: ActionContext, id: number) {
+  await checkAdmin(context);
+  if (!id) {
+    await context.session.execute('help admin.asset.invalid');
+    return "";
+  }
+  await context.prism.adminToggleAssetState(id, false);
+  return `已禁用 ${id}`;
+}
+
+async function handleAdminDelCoupon(context: ActionContext, id: number) {
   await checkAdmin(context);
   if (!id) {
     await context.session.execute('help admin.coupon.del');
     return "";
   }
-  await context.prism.adminDeleteAsset(parseInt(id));
+  await context.prism.adminDeleteAsset(id);
   return `优惠券 ${id} 删除成功`;
 }
 
@@ -661,11 +681,11 @@ async function handleAdminListCoupons(context: ActionContext) {
   }).join('\n\n');
 }
 
-async function handleAdminAddCoupon(context: ActionContext, name: string, assetId: number, type: string, value: number) {
+async function handleAdminAddCoupon(context: ActionContext, name: string, defId: number, type: string, value: number) {
   await checkAdmin(context);
   const opts = context.options || {};
 
-  if (!name || assetId === undefined || !type || value === undefined) {
+  if (!name || defId === undefined || !type || value === undefined) {
     await context.session.execute('help admin.coupon.add');
     return "";
   }
@@ -679,7 +699,7 @@ async function handleAdminAddCoupon(context: ActionContext, name: string, assetI
 
   await context.prism.adminCreateCoupon({
     name,
-    assetId: assetId,
+    assetDefId: defId,
     billingEffect: {
       type: t,
       value: value,
@@ -699,7 +719,7 @@ async function handleAdminAddCoupon(context: ActionContext, name: string, assetI
 async function handleAdminListGifts(context: ActionContext) {
   await checkAdmin(context);
   const res = await context.prism.adminListGifts();
-  if (!res || res.length === 0) return "暂无礼包";
+  if (!res || res.length === 0) return "暂无礼物";
   return res.map((g: any) => {
     const limit = g.oncePerUser ? '🔴 每人限领一次' : '🟢 可重复领取';
     const items = (g.body || []).map((i: any) => {
@@ -717,59 +737,137 @@ async function handleAdminListGifts(context: ActionContext) {
   }).join('\n\n');
 }
 
+function parseFriendlyDate(dateStr: string | undefined): Date | undefined {
+  if (!dateStr) return undefined;
+  // 支持人性化格式: YYYY-MM-DD-HH-mm-ss
+  const customFormat = /^(\d{4})-(\d{2})-(\d{2})-(\d{2})-(\d{2})-(\d{2})$/;
+  const match = dateStr.match(customFormat);
+  if (match) {
+    const [_, y, m, d, h, min, s] = match;
+    return new Date(`${y}-${m}-${d}T${h}:${min}:${s}`);
+  }
+  // 尝试标准格式
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
 async function handleAdminAddGift(context: ActionContext, name: string, content: string) {
   await checkAdmin(context);
+  const options = context.options || {};
+
+  // 1. 基础参数校验
   if (!name || !content) {
     await context.session.execute('help admin.gift.add');
     return "";
   }
+
   try {
+    // 2. 获取现有资产列表用于校验 ID
     const allAssets = await context.prism.adminListAssets() as Asset[];
-    const assetMap = new Map(allAssets.map(a => [a.assetId, a]));
+    const assetMap = new Map(allAssets.map(a => [a.id, a]));
 
-    const items = content.split(/[,，]/).map(item => {
-      const parts = item.trim().split(/[:：]/);
-      if (parts.length < 2) throw new Error(`项 "${item}" 格式错误，应为 id:count`);
-      const [idStr, countStr] = parts;
-      const assetId = parseInt(idStr);
-      const count = parseInt(countStr);
+    // 3. 解析输入内容
+    // 格式定义: id:count:strategy:duration/expire:active:comment
+    // 分隔符: 逗号分隔多个物品，冒号分隔字段
+    const items = content.split(/[,，]/).map((itemStr, index) => {
+      const parts = itemStr.trim().split(/[:：]/);
+      if (parts.length < 1 || !parts[0]) {
+        throw new Error(`第 ${index + 1} 项格式错误，必须包含资产ID`);
+      }
 
-      if (isNaN(assetId)) throw new Error(`资产ID "${idStr}" 无效`);
-      if (isNaN(count) || count <= 0) throw new Error(`数量 "${countStr}" 无效`);
+      const [
+        idStr,          // 0: 资产ID
+        countStr,       // 1: 数量
+        strategyStr,    // 2: 合并策略
+        valueStr,       // 3: 时长(秒) 或 过期时间
+        activeStr,      // 4: 生效时间
+        commentStr      // 5: 备注
+      ] = parts;
 
-      const asset = assetMap.get(assetId);
-      if (!asset) throw new Error(`Asset ID ${assetId} not found`);
-      return { assetId, assetType: asset.type, name: asset.name, mergeStrategy: 'STACK', oncePerUser: false, count };
+      // ID 校验
+      const id = parseInt(idStr);
+      if (isNaN(id)) throw new Error(`第 ${index + 1} 项资产ID "${idStr}" 无效`);
+      if (!assetMap.has(id)) throw new Error(`第 ${index + 1} 项资产ID ${id} 不存在`);
+      const asset = assetMap.get(id)!;
+
+      // 数量校验 (默认 1)
+      const count = countStr ? parseInt(countStr) : 1;
+      if (isNaN(count) || count <= 0) throw new Error(`第 ${index + 1} 项数量 "${countStr}" 无效`);
+
+      // 合并策略校验 (默认 STACK)
+      let mergeStrategy: "STACK" | "EXTEND_TIME" | "REPLACE" = "STACK";
+      if (strategyStr && strategyStr.trim()) {
+        const s = strategyStr.trim().toUpperCase();
+        if (["STACK", "EXTEND_TIME", "REPLACE"].includes(s)) {
+          mergeStrategy = s as any;
+        }
+      }
+
+      // 时间/时长校验
+      let durationMs: number | undefined;
+      let expireAt: string | undefined;
+
+      if (mergeStrategy === 'EXTEND_TIME') {
+        // 如果是 EXTEND_TIME，valueStr 解析为时长(秒)
+        if (valueStr) {
+          const seconds = parseFloat(valueStr);
+          if (!isNaN(seconds) && seconds > 0) {
+            durationMs = seconds * 1000;
+          }
+        }
+      } else {
+        // 否则解析为过期时间
+        const date = parseFriendlyDate(valueStr);
+        if (date) expireAt = date.toISOString();
+      }
+
+      // 生效时间
+      const activeAtDate = parseFriendlyDate(activeStr);
+      const activeAt = activeAtDate ? activeAtDate.toISOString() : undefined;
+
+      return {
+        id: asset.id,
+        name: asset.name,
+        count,
+        expireAt,
+        activeAt,
+        durationMs,
+        mergeStrategy,
+        comment: commentStr || undefined,
+        oncePerUser: false // 默认 false，由礼包整体控制
+      };
     });
 
+    // 4. 发送请求
     await context.prism.adminCreateGift({
       name,
-      oncePerUser: false,
+      oncePerUser: !!options.once,
       body: items
     });
-    return `礼包 ${name} 创建成功`;
+
+    return `🎁 礼物 [${name}] 创建成功！包含 ${items.length} 种物品。`;
   } catch (e: any) {
-    return `创建失败: ${e.message}`;
+    return `❌ 创建失败: ${e.message}`;
   }
 }
 
-async function handleAdminDelGift(context: ActionContext, id: string) {
+async function handleAdminDelGift(context: ActionContext, id: number) {
   await checkAdmin(context);
   if (!id) {
     await context.session.execute('help admin.gift.del');
     return "";
   }
-  await context.prism.adminDeleteGift(parseInt(id));
-  return `礼包 ${id} 删除成功`;
+  await context.prism.adminDeleteGift(id);
+  return `礼物 ${id} 删除成功`;
 }
 
-async function handleAdminGiftCodes(context: ActionContext, id: string, count: string) {
+async function handleAdminGiftCodes(context: ActionContext, id: number, count: number) {
   await checkAdmin(context);
   if (!id || !count) {
     await context.session.execute('help admin.gift.codes');
     return "";
   }
-  const res = await context.prism.adminGenerateGiftCodes(parseInt(id), parseInt(count));
+  const res = await context.prism.adminGenerateGiftCodes(id, count);
   return `成功生成 ${res.count} 个兑换码:\n${res.codes.join('\n')}`;
 }
 
@@ -795,24 +893,24 @@ async function handleAdminListRules(context: ActionContext) {
   }).join('\n\n');
 }
 
-async function handleAdminDelRule(context: ActionContext, id: string) {
+async function handleAdminDelRule(context: ActionContext, id: number) {
   await checkAdmin(context);
   if (!id) {
     await context.session.execute('help admin.rule.del');
     return "";
   }
-  await context.prism.adminDeleteRule(parseInt(id));
+  await context.prism.adminDeleteRule(id);
   return `规则 ${id} 删除成功`;
 }
 
-async function handleAdminRuleStatus(context: ActionContext, id: string, state: string) {
+async function handleAdminRuleStatus(context: ActionContext, id: number, state: string) {
   await checkAdmin(context);
   if (!id || !state) {
     await context.session.execute('help admin.rule.set');
     return "";
   }
   const available = ['on', 'true', 'enable', '1', 'yes'].includes(state.toLowerCase());
-  await context.prism.adminUpdateRuleStatus(parseInt(id), available);
+  await context.prism.adminUpdateRuleStatus(id, available);
   return `规则 ${id} 已${available ? '启用' : '禁用'}`;
 }
 
@@ -848,6 +946,23 @@ async function handleAdminUserAssetDel(context: ActionContext, user: string, use
     await context.prism.deleteUserAsset(userId, userAssetId);
     return `已为用户 ${userId} 删除资产(ID:${userAssetId})`;
   }
+}
+
+async function handleAdminUserAssetList(context: ActionContext, user: string) {
+  await checkAdmin(context);
+  if (!user) {
+    await context.session.execute('help admin.user.asset.list');
+    return "";
+  }
+  const { error, userId } = await getTargetUserId(context, user);
+  if (error) return error;
+
+  const res = await context.prism.assets(userId);
+  if (!res || res.length === 0) return `用户 ${userId} 没有任何资产`;
+  return res.map((a: UserAsset) => {
+    const expire = a.expireAt ? `(到期: ${formatDateTime(a.expireAt)})` : '';
+    return `[${a.id}]-[${a.assetId}] ${a.asset.name} x${a.count} ${expire}`;
+  }).join('\n');
 }
 
 export function apply(ctx: Context, config: Config) {
@@ -886,25 +1001,28 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('redeem <code>').action(createAction(handleRedeem));
   ctx.command('coin <alias>').action(createAction(handleCoin));
 
-  ctx.command('add <user:user> <amount>').action(createAction(handleWalletAdd));
-  ctx.command('del <user:user> <amount>').action(createAction(handleWalletDeduct));
+  ctx.command('add <user:user> <amount:number>').action(createAction(handleWalletAdd));
+  ctx.command('del <user:user> <amount:number>').action(createAction(handleWalletDeduct));
 
   ctx.command('overwrite <user:user> <amount>').action(createAction(handleCostOverwrite));
 
   // Admin Commands
   ctx.command('admin.asset.list', '列出资产').action(createAction(handleAdminListAssets));
-  ctx.command('admin.asset.add <type> <id:number> <name> [desc]', '添加资产')
+  ctx.command('admin.asset.add <type> <defId:number> <name> [desc]', '添加资产')
     .option('valid', '-v [val:boolean]', { fallback: true })
     .option('active', '--active <date:string>')
     .option('expire', '--expire <date:string>')
     .action(createAction(handleAdminAddAsset));
-  ctx.command('admin.asset.del <id>', '删除资产').action(createAction(handleAdminDelAsset));
+  ctx.command('admin.asset.del <id:number>', '删除资产').action(createAction(handleAdminDelAsset));
+  ctx.command('admin.asset.valid <id:number>', '让资产生效').action(createAction(handleAdminValidAsset));
+  ctx.command('admin.asset.invalid <id:number>', '让资产无效').action(createAction(handleAdminInvalidAsset));
 
   ctx.command('admin.coupon.list', '列出优惠券').action(createAction(handleAdminListCoupons));
   ctx.command('admin.user.asset.add <user:user> <assetId:number> [count:number]', '发放资产').action(createAction(handleAdminUserAssetAdd));
   ctx.command('admin.user.asset.del <user:user> <userAssetId:number> [count:number]', '删除资产(指定数量则扣除)').action(createAction(handleAdminUserAssetDel));
+  ctx.command('admin.user.asset.list <user:user>', '列出用户资产').action(createAction(handleItemsCmd))
 
-  ctx.command('admin.coupon.add <name> <assetId:number> <type> <value:number>', '添加优惠券')
+  ctx.command('admin.coupon.add <name> <defId:number> <type> <value:number>', '添加优惠券')
     .option('priority', '-p <val:number>', { fallback: 0 })
     .option('consume', '-c', { fallback: false })
     .option('stackable', '-s', { fallback: false })
@@ -912,16 +1030,19 @@ export function apply(ctx: Context, config: Config) {
     .option('max', '--max <val:number>')
     .option('rules', '--rules <ids:string>')
     .action(createAction(handleAdminAddCoupon));
-  ctx.command('admin.coupon.del <id>', '删除优惠券').action(createAction(handleAdminDelCoupon));
+  ctx.command('admin.coupon.del <id:number>', '删除优惠券').action(createAction(handleAdminDelCoupon));
 
-  ctx.command('admin.gift.list', '列出礼包').action(createAction(handleAdminListGifts));
-  ctx.command('admin.gift.add <name> <content:text>', '添加礼包 (格式: id:count,id:count)').action(createAction(handleAdminAddGift));
-  ctx.command('admin.gift.del <id>', '删除礼包').action(createAction(handleAdminDelGift));
-  ctx.command('admin.gift.codes <id> <count>', '生成礼包码').action(createAction(handleAdminGiftCodes));
+  ctx.command('admin.gift.list', '列出礼物').action(createAction(handleAdminListGifts));
+  ctx.command('admin.gift.add <name> <content:text>', '添加礼物')
+    .usage('格式: id:count:strategy:duration/expire:active:comment (逗号分隔多个)\n示例: 1001:1:EXTEND_TIME:2592000::备注 (30天1001物品)\n示例: 1002:10:::2025-01-01:: (10个1002物品，有效期至2025-01-01)')
+    .option('once', '-o [val:boolean]', { fallback: false })
+    .action(createAction(handleAdminAddGift));
+  ctx.command('admin.gift.del <id:number>', '删除礼物').action(createAction(handleAdminDelGift));
+  ctx.command('admin.gift.codes <id:number> <count:number>', '生成礼物兑换码').action(createAction(handleAdminGiftCodes));
 
   ctx.command('admin.rule.list', '列出规则').action(createAction(handleAdminListRules));
-  ctx.command('admin.rule.del <id>', '删除规则').action(createAction(handleAdminDelRule));
-  ctx.command('admin.rule.set <id> <state>', '设置规则状态').action(createAction(handleAdminRuleStatus));
+  ctx.command('admin.rule.del <id:number>', '删除规则').action(createAction(handleAdminDelRule));
+  ctx.command('admin.rule.set <id:number> <state>', '设置规则状态').action(createAction(handleAdminRuleStatus));
   ctx.command('echo <message>')
     .action((_, message) => message)
 
