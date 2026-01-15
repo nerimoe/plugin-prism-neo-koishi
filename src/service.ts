@@ -100,6 +100,13 @@ export class PrismService {
         )
     }
 
+    async redeemById(userId: string, id: number) {
+        return await this.ctx.http.post(
+            this.url(`/users/QQ:${userId}/redeem-by-id`),
+            { id }
+        )
+    }
+
     async machinePowerOn(machineName: string, userId: string, needLogin: boolean = true) {
         return await this.ctx.http.post(
             this.url(`/machine/power`),

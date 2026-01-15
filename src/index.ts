@@ -18,7 +18,7 @@ export interface Config {
   autoLockOnLogin: boolean;
   logoutConfirmation: boolean;
   powerOffInterval: number;
-
+  redeemOnRegister: number;
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -34,7 +34,8 @@ export const Config: Schema<Config> = Schema.object({
   currency: Schema.string().default("月饼").description("货币名称"),
   autoLockOnLogin: Schema.boolean().default(true).description("登录时自动获取门锁密码"),
   logoutConfirmation: Schema.boolean().default(true).description("登出时需要二次确认"),
-  powerOffInterval: Schema.number().default(600000).description("多长时间没人时自动关闭所有机器")
+  powerOffInterval: Schema.number().default(600000).description("多长时间没人时自动关闭所有机器"),
+  redeemOnRegister: Schema.number().default(0)
 })
 
 async function getUserName(session: Session, userId?: string) {
@@ -236,7 +237,23 @@ async function handleRegisterCmd(context: ActionContext, user?: string) {
   if (error) return error;
 
   await context.prism.register(userId);
-  return user ? `为用户 ${userId} 注册成功` : "注册成功";
+  let message = [];
+  message.push(user ? `为用户 ${userId} 注册成功` : "注册成功");
+  if (context.config.redeemOnRegister) {
+    let res = await context.prism.redeemById(userId, context.config.redeemOnRegister)
+    let items = res.finalAssets;
+    message.push("获得新玩家特典");
+    items.forEach(item => {
+      let itemName = item.name;
+      if (item.assetType === 'PASS' && item.durationMs) {
+        const days = Math.floor(item.durationMs / (1000 * 60 * 60 * 24));
+        if (days > 0) itemName += ` (${days}天)`;
+      }
+      message.push(`- ${itemName} x${item.count} `);
+    });
+  }
+  message.push("\n");
+  return message.join('\n');
 }
 
 async function handleLoginCmd(context: ActionContext, user?: string) {
