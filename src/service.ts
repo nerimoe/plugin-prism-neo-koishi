@@ -231,8 +231,8 @@ export class PrismService {
         return await this.ctx.http.delete(this.url(`/admin/gifts/${id}`));
     }
 
-    async adminGenerateGiftCodes(id: number, count: number) {
-        return await this.ctx.http.post(this.url(`/admin/gifts/${id}/codes`), { count });
+    async adminGenerateGiftCodes(id: number, data: { count: number, maxUseCount?: number, activeAt?: string, expireAt?: string, comment?: string }) {
+        return await this.ctx.http.post(this.url(`/admin/gifts/${id}/codes`), data);
     }
 
     async adminListRules() {

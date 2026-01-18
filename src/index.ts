@@ -136,7 +136,12 @@ export function apply(ctx: Context, config: Config) {
     .option('once', '-o [val:boolean]', { fallback: false })
     .action(createAction(handleAdminAddGift));
   ctx.command('admin.gift.del <id:number>', '删除礼物').action(createAction(handleAdminDelGift));
-  ctx.command('admin.gift.codes <id:number> <count:number>', '生成礼物兑换码').action(createAction(handleAdminGiftCodes));
+  ctx.command('admin.gift.codes <id:number> [count:number]', '生成礼物兑换码')
+    .option('active', '-a <date:string>')
+    .option('expire', '-e <date:string>')
+    .option('max', '-m <val:number>', { fallback: 0 })
+    .option('comment', '-c <val:string>', { fallback: '' })
+    .action(createAction(handleAdminGiftCodes));
 
   ctx.command('admin.rule.list', '列出规则').action(createAction(handleAdminListRules));
   ctx.command('admin.rule.del <id:number>', '删除规则').action(createAction(handleAdminDelRule));

@@ -269,13 +269,22 @@ export async function handleAdminDelGift(context: ActionContext, id: number) {
     return `礼物 ${id} 删除成功`;
 }
 
-export async function handleAdminGiftCodes(context: ActionContext, id: number, count: number) {
+export async function handleAdminGiftCodes(context: ActionContext, id: number, count?: number) {
     await checkAdmin(context);
-    if (!id || !count) {
+    if (!id) {
         await context.session.execute('help admin.gift.codes');
         return "";
     }
-    const res = await context.prism.adminGenerateGiftCodes(id, count);
+    const options = context.options || {};
+    if (count === undefined) count = 1;
+    let input = {
+        count,
+        maxUseCount: options.maxUseCount,
+        activeAt: options.active,
+        expireAt: options.expire,
+        comment: options.comment
+    }
+    const res = await context.prism.adminGenerateGiftCodes(id, input);
     return `成功生成 ${res.count} 个兑换码:\n${res.codes.join('\n')}`;
 }
 
