@@ -279,7 +279,7 @@ export async function handleAdminGiftCodes(context: ActionContext, id: number, c
     if (count === undefined) count = 1;
     let input = {
         count,
-        maxUseCount: options.maxUseCount,
+        maxUseCount: options.max,
         activeAt: options.active,
         expireAt: options.expire,
         comment: options.comment
