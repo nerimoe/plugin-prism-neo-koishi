@@ -6,7 +6,9 @@ export async function handleLockCmd(context: ActionContext) {
         '🔑 获取密码成功',
         `你的门锁密码是: ${res.password}`,
         `输入完成后按 # 结束`,
-        '注意! 门锁密码有效期为三分钟'
+        '注意! 门锁密码有效期为三分钟',
+        '如果密码不对请尝试重新获取密码',
+        '可通过 /lock 再次获取密码',
     ].join('\n');
 }
 
