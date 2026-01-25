@@ -91,7 +91,8 @@ export async function handleLogoutCmd(context: ActionContext, user?: string) {
         const res = await context.prism.logout(targetUserId);
         let name = await getUserName(context.session, targetUserId);
         let message = user ? `✅ 已为用户 ${name} 退场` : '✅ 退场成功';
-
+        message += "\n";
+        message += "离开时请带走自己生产的垃圾以及手套，并且确认关好房门，否则可能会追究您的责任。";
         message += "\n";
         message += formatBilling(res, context.config.currency);
         await context.session.bot.broadcast(context.config.pmOnLogout, `${name}\n${message}`)
