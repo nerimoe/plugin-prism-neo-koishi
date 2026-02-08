@@ -1,4 +1,5 @@
 import { ActionContext } from '../types';
+import { getTargetUserId } from './utils';
 
 export async function handleLockCmd(context: ActionContext) {
     const res = await context.prism.getLock(context.session.userId);
@@ -55,4 +56,12 @@ export async function handleCoin(context: ActionContext, alias: string) {
     let isAdmin = await context.ctx.permissions.check(context.config.admin, context.session)
     const res = await context.prism.insertCoin(alias, context.session.userId, isAdmin);
     return `🪙 已为 ${res.machineName} 投入 ${res.count} 个币`;
+}
+
+export async function handleInsertCard(context: ActionContext, alias: string) {
+    const { error, userId } = await getTargetUserId(context, null);
+    if (error) return error;
+    let res = await context.prism.insertCard(alias, userId)
+    let acc = (res.value as string).slice(-4);
+    return `💳 使用尾号为 ${acc} 的卡刷卡成功`
 }

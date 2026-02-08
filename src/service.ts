@@ -193,6 +193,15 @@ export class PrismService {
         )
     }
 
+    async insertCard(alias: string, userId: string) {
+        return await this.ctx.http.post(
+            this.url(`/remote/${alias}/aime`),
+            {
+                userId: `QQ:${userId}`
+            }
+        )
+    }
+
     // --- Admin API ---
 
     async adminListAssets() {

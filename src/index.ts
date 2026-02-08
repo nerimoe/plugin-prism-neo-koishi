@@ -4,7 +4,7 @@ import { ApiError } from './model'
 import { ActionContext } from './types'
 import { handleAdminAddAsset, handleAdminAddCoupon, handleAdminAddGift, handleAdminDelAsset, handleAdminDelCoupon, handleAdminDelGift, handleAdminDelRule, handleAdminGiftCodes, handleAdminInvalidAsset, handleAdminListAssets, handleAdminListCoupons, handleAdminListGifts, handleAdminListRules, handleAdminRuleStatus, handleAdminUserAssetAdd, handleAdminUserAssetDel, handleAdminUserAssetList, handleAdminValidAsset } from './handlers/admin'
 import { handleItemsCmd, handleRedeem } from './handlers/item'
-import { handleCoin, handleLockCmd, handleMachineOff, handleMachineOn, handleMachineShow } from './handlers/machine'
+import { handleCoin, handleInsertCard, handleLockCmd, handleMachineOff, handleMachineOn, handleMachineShow } from './handlers/machine'
 import { handleListCmd, handleLoginCmd, handleLogoutCmd, handleRegisterCmd } from './handlers/user'
 import { handleBillingCmd, handleCostOverwrite, handleHistoriesCmd, handleWalletAdd, handleWalletCmd, handleWalletDeduct } from './handlers/wallet'
 
@@ -98,6 +98,7 @@ export function apply(ctx: Context, config: Config) {
   ctx.command('off <alias>').action(createAction(handleMachineOff));
   ctx.command('redeem <code>').action(createAction(handleRedeem));
   ctx.command('coin <alias>').action(createAction(handleCoin));
+  ctx.command('scan <machine>').action(createAction(handleInsertCard));
 
   ctx.command('add <user:user> <amount:number>').action(createAction(handleWalletAdd));
   ctx.command('del <user:user> <amount:number>').action(createAction(handleWalletDeduct));
